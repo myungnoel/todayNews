@@ -13,7 +13,8 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
 const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
-const httpsAgent = new Agent({ rejectUnauthorized: false });
+const isLocal = process.env.NODE_ENV !== 'production';
+const httpsAgent = isLocal ? new Agent({ rejectUnauthorized: false }) : undefined;
 
 app.use(express.static(join(__dirname, 'public')));
 
@@ -26,7 +27,7 @@ function stripHtml(str) {
 async function summarize(title, description) {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    agent: httpsAgent,
+    ...(httpsAgent && { agent: httpsAgent }),
     headers: {
       'Authorization': `Bearer ${GROQ_API_KEY}`,
       'Content-Type': 'application/json',
@@ -76,7 +77,7 @@ async function fetchTopNews() {
   for (const q of queries) {
     const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(q)}&display=3&sort=date`;
     const res = await fetch(url, {
-      agent: httpsAgent,
+      ...(httpsAgent && { agent: httpsAgent }),
       headers: {
         'X-Naver-Client-Id': NAVER_CLIENT_ID,
         'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
