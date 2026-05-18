@@ -114,19 +114,6 @@ async function fetchTopNews() {
   return articles;
 }
 
-app.get('/api/debug', async (_req, res) => {
-  try {
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'llama-3.1-8b-instant', max_tokens: 50, messages: [{ role: 'user', content: '안녕' }] })
-    });
-    const data = await r.json();
-    res.json({ ok: true, groq: data.choices?.[0]?.message?.content ?? data });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
-  }
-});
 
 app.get('/api/news', async (_req, res) => {
   try {
