@@ -4,22 +4,26 @@ import fetch from 'node-fetch';
 import { Agent } from 'node:https';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import Parser from 'rss-parser';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
+const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
 const httpsAgent = new Agent({ rejectUnauthorized: false });
-const rss = new Parser();
 
 app.use(express.static(join(__dirname, 'public')));
 
 let cache = { date: null, articles: [] };
 
-async function summarize(title) {
+function stripHtml(str) {
+  return str.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&#\d+;/g, '').trim();
+}
+
+async function summarize(title, description) {
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     agent: httpsAgent,
@@ -28,7 +32,7 @@ async function summarize(title) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       max_tokens: 300,
       temperature: 0.3,
       messages: [
@@ -38,11 +42,12 @@ async function summarize(title) {
         },
         {
           role: 'user',
-          content: `뉴스 제목을 보고 이 뉴스의 핵심 내용을 3줄로 추론해서 요약해줘.
+          content: `다음 뉴스를 핵심만 담아 정확히 3줄로 요약해줘.
 각 줄은 35자 이내 한 문장. 반드시 아래 형식으로만 답해:
 ["첫째 줄","둘째 줄","셋째 줄"]
 
-제목: ${title}`
+제목: ${title}
+내용: ${description}`
         }
       ]
     })
@@ -56,14 +61,7 @@ async function summarize(title) {
     if (Array.isArray(parsed) && parsed.length >= 2) return parsed.slice(0, 3);
     throw new Error('invalid');
   } catch {
-    // 파싱 실패 시 제목을 3등분해서 표시
-    const words = title.split(' ');
-    const mid = Math.ceil(words.length / 2);
-    return [
-      words.slice(0, mid).join(' '),
-      words.slice(mid).join(' '),
-      '자세한 내용은 원문을 참고하세요.',
-    ];
+    return [title];
   }
 }
 
@@ -71,19 +69,37 @@ async function fetchTopNews() {
   const today = new Date().toISOString().slice(0, 10);
   if (cache.date === today && cache.articles.length > 0) return cache.articles;
 
-  const feed = await rss.parseURL('https://news.google.com/rss/headlines/section/topic/NATION?hl=ko&gl=KR&ceid=KR:ko');
-  const items = feed.items.slice(0, 3);
+  const queries = ['정치', '경제', '사회'];
+  const seen = new Set();
+  const items = [];
+
+  for (const q of queries) {
+    const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(q)}&display=3&sort=date`;
+    const res = await fetch(url, {
+      agent: httpsAgent,
+      headers: {
+        'X-Naver-Client-Id': NAVER_CLIENT_ID,
+        'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
+      }
+    });
+    const data = await res.json();
+    for (const item of (data.items ?? [])) {
+      const title = stripHtml(item.title);
+      if (!seen.has(title)) {
+        seen.add(title);
+        items.push({ title, description: stripHtml(item.description) });
+        break;
+      }
+    }
+  }
 
   const articles = await Promise.all(
-    items.map(async (item) => {
-      const title = item.title?.replace(/ - [^-]+$/, '') ?? '';
-      return {
-        title,
-        source: item.source ?? '',
-        publishedAt: item.pubDate ?? '',
-        bullets: await summarize(title),
-      };
-    })
+    items.map(async ({ title, description }) => ({
+      title,
+      source: '',
+      publishedAt: new Date().toISOString(),
+      bullets: await summarize(title, description),
+    }))
   );
 
   cache = { date: today, articles };
