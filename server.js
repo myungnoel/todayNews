@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import fetch from 'node-fetch';
 import { Agent } from 'node:https';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -14,7 +13,16 @@ const NAVER_CLIENT_ID = process.env.NAVER_CLIENT_ID;
 const NAVER_CLIENT_SECRET = process.env.NAVER_CLIENT_SECRET;
 
 const isLocal = process.env.NODE_ENV !== 'production';
-const httpsAgent = isLocal ? new Agent({ rejectUnauthorized: false }) : undefined;
+
+// 로컬에서만 SSL 우회 (VPN 환경 대응)
+async function apiFetch(url, options = {}) {
+  if (isLocal) {
+    const { default: nodeFetch } = await import('node-fetch');
+    const agent = new Agent({ rejectUnauthorized: false });
+    return nodeFetch(url, { ...options, agent });
+  }
+  return fetch(url, options);
+}
 
 app.use(express.static(join(__dirname, 'public')));
 
@@ -25,9 +33,8 @@ function stripHtml(str) {
 }
 
 async function summarize(title, description) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await apiFetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    ...(httpsAgent && { agent: httpsAgent }),
     headers: {
       'Authorization': `Bearer ${GROQ_API_KEY}`,
       'Content-Type': 'application/json',
@@ -62,6 +69,7 @@ async function summarize(title, description) {
     if (Array.isArray(parsed) && parsed.length >= 2) return parsed.slice(0, 3);
     throw new Error('invalid');
   } catch {
+    console.error('summarize failed:', data);
     return [title];
   }
 }
@@ -76,8 +84,7 @@ async function fetchTopNews() {
 
   for (const q of queries) {
     const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(q)}&display=3&sort=date`;
-    const res = await fetch(url, {
-      ...(httpsAgent && { agent: httpsAgent }),
+    const res = await apiFetch(url, {
       headers: {
         'X-Naver-Client-Id': NAVER_CLIENT_ID,
         'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
@@ -117,7 +124,7 @@ app.get('/api/news', async (_req, res) => {
   }
 });
 
-if (process.env.NODE_ENV !== 'production') {
+if (isLocal) {
   app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
 }
 
