@@ -4,15 +4,16 @@ import fetch from 'node-fetch';
 import { Agent } from 'node:https';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import Parser from 'rss-parser';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const httpsAgent = new Agent({ rejectUnauthorized: false });
+const rss = new Parser();
 
 app.use(express.static(join(__dirname, 'public')));
 
@@ -56,20 +57,19 @@ async function fetchTopNews() {
   const today = new Date().toISOString().slice(0, 10);
   if (cache.date === today && cache.articles.length > 0) return cache.articles;
 
-  const url = `https://newsapi.org/v2/everything?q=%ED%95%9C%EA%B5%AD+%EB%89%B4%EC%8A%A4&language=ko&sortBy=publishedAt&pageSize=3&apiKey=${NEWS_API_KEY}`;
-  const res = await fetch(url, { agent: httpsAgent });
-  if (!res.ok) throw new Error(`News API error: ${res.status}`);
-
-  const data = await res.json();
-  if (data.status !== 'ok') throw new Error(data.message || 'Unknown API error');
+  const feed = await rss.parseURL('https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko');
+  const items = feed.items.slice(0, 3);
 
   const articles = await Promise.all(
-    data.articles.map(async (a) => ({
-      title: a.title?.replace(/ - [^-]+$/, '') ?? '',
-      source: a.source?.name ?? '',
-      publishedAt: a.publishedAt,
-      bullets: await summarize(a.title, a.description),
-    }))
+    items.map(async (item) => {
+      const title = item.title?.replace(/ - [^-]+$/, '') ?? '';
+      return {
+        title,
+        source: item.source ?? '',
+        publishedAt: item.pubDate ?? '',
+        bullets: await summarize(title, item.contentSnippet),
+      };
+    })
   );
 
   cache = { date: today, articles };
