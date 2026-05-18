@@ -57,7 +57,7 @@ async function fetchTopNews() {
   const today = new Date().toISOString().slice(0, 10);
   if (cache.date === today && cache.articles.length > 0) return cache.articles;
 
-  const feed = await rss.parseURL('https://news.google.com/rss?hl=ko&gl=KR&ceid=KR:ko');
+  const feed = await rss.parseURL('https://news.google.com/rss/headlines/section/topic/NATION?hl=ko&gl=KR&ceid=KR:ko');
   const items = feed.items.slice(0, 3);
 
   const articles = await Promise.all(
