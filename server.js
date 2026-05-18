@@ -2,6 +2,10 @@ import 'dotenv/config';
 import express from 'express';
 import fetch from 'node-fetch';
 import { Agent } from 'node:https';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,7 +14,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const httpsAgent = new Agent({ rejectUnauthorized: false });
 
-app.use(express.static('public'));
+app.use(express.static(join(__dirname, 'public')));
 
 let cache = { date: null, articles: [] };
 
