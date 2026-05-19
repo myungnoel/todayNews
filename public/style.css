@@ -132,7 +132,32 @@ main {
   font-size: 1.05rem;
 }
 
-footer { padding: 16px; text-align: center; }
+footer {
+  padding: 16px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.news-card.speaking {
+  outline: 3px solid var(--accent);
+  box-shadow: 0 0 0 4px rgba(26,115,232,0.15);
+}
+
+#speak-btn {
+  background: white;
+  color: var(--accent);
+  border: 2px solid var(--accent);
+  border-radius: 24px;
+  padding: 12px 24px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#speak-btn:active { opacity: 0.8; }
+#speak-btn:disabled { opacity: 0.4; cursor: default; }
 
 #refresh-btn {
   background: var(--accent);
